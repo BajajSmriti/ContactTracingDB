@@ -1,0 +1,301 @@
+---
+title: "Practicum 3- Plants"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+  word_document: default
+---
+#### Author: Smriti Bajaj
+
+### 1. Inspect the Plant Catalog XML
+
+Here, plants.xml is being parsed using xmlParse() function that comes with the "XML" package. It parses a valid XML and beautifies it.
+
+```{r}
+# Load the package required to read XML files.
+if(!require("XML")) install.packages("XML")
+library("XML")
+
+# Give the input file name- "plants.xml" to the function.
+result <- xmlParse(file = "plants.xml")
+
+# Print the result.
+print(result)
+
+```
+
+### 2. Load the Plant Catalog XML into a dataframe using xmlToDataFrame
+
+xmlToDataFrame() function is available from "XML" package which transforms an XML document to a data frame. A data frame is a table or a two-dimensional array-like structure in which each column contains values of one variable/element(in XML) and each row contains one set of values from each column.
+
+```{r}
+#loading the XML
+xmlDataFrame <- xmlToDataFrame("plants.xml")
+
+# print the data frame
+xmlDataFrame
+```
+
+### 3. Creating a column "RETAIL" 
+
+Creation of a column in a dataframe can be done by simply assigning value to it using a dollar symbol ($) for reference of the column name. Here, as.numeric() function is used to convert a **string** into **double** type. Additionally, dollar symbol which is the first character in every Price string(row), is excluded from the string by using substring() function.
+
+```{r}
+#Stripping off the $ symbol from PRICE column
+xmlDataFrame$RETAIL = as.numeric(substring(xmlDataFrame$PRICE,2))
+
+xmlDataFrame
+
+```
+
+### 4. Removing the PRICE column
+
+PRICE column since already has the data in newly created RETAIL column, to remove redundancy and ensure consistency in the data frame, subset() function is being used to delete the column.
+
+**S3 method for class 'data.frame'**
+subset(x, subset, select, drop = FALSE, ...)
+
+**Arguments**
+
+x	
+object to be subsetted.
+
+subset	
+logical expression indicating elements or rows to keep: missing values are taken as false.
+
+select	
+expression, indicating columns to select from a data frame.
+
+drop	
+passed on to [ indexing operator.
+
+...	
+further arguments to be passed to or from other methods.
+
+```{r}
+#deleting PRICE column 
+xmlDataFrame<- subset(xmlDataFrame, select=-PRICE)
+
+xmlDataFrame
+```
+
+### 5. Increase prices by 4.25%
+
+A simple formula to increase the prices by 4.25 % is-
+
+**New price = Old price + (Old price*4.25)/100**
+
+```{r}
+# increase Retail column values by 4.25% and update the same
+xmlDataFrame$RETAIL=xmlDataFrame$RETAIL*(1+0.0425)
+
+xmlDataFrame
+
+```
+
+### 6. Creating a histogram of the number of plants by price
+
+A histogram can be created using hist() function. It specifies the frequency on Y axis and the values of a variable bucketed into ranges on X axis.
+
+Following is the description of the parameters used −
+
+**v** is a vector containing numeric values used in histogram (xmlDataFrame$RETAIL).
+
+**main** indicates title of the chart.
+
+**col** is used to set color of the bars.
+
+**border** is used to set border color of each bar.
+
+**xlab** is used to give description of x-axis.
+
+**xlim** is used to specify the range of values on the x-axis.
+
+**ylim** is used to specify the range of values on the y-axis.
+
+```{r}
+# adorning a histogram by price
+
+h <- hist(xmlDataFrame$RETAIL,
+main="Number of plants arranged by prices ",
+xlab="Price in USD >",
+ylab="Number of plants >",
+xlim = c(0,14),
+ylim = c(0,10),
+col="maroon",
+border = "yellow"
+)
+
+text(h$mids,h$counts,labels=h$counts, adj=c(0.5, -0.5))
+
+```
+
+### 7. Using sqldf create a SQL query that finds the common names of all plants that cost less than $8 and grow in Sunny light
+
+sqldf library is used for running SQL staements on dataframes. The first argument is a character string representing an SQL select statement or character vector whose components each represent a successive SQL statement to be executed. If this argument is missing then it establishes a connection which subsequent sqldf statements access. 
+
+stringsAsFactors is an another argument which if TRUE then those columns output from the database as "character" are converted to "factor" if the heuristic is unable to determine the class. This is of use with categorical variables.
+
+```{r}
+# loading the required package.
+if(!require("sqldf")) install.packages("sqldf")
+library("sqldf")
+
+join_string <- "select
+                COMMON
+                from xmlDataFrame
+                where RETAIL<8 and LIGHT='Sunny'"
+                
+sqldf(join_string, stringsAsFactors = FALSE)
+```
+
+### 8. Using dataframe functions to calculate how many plants grow in full shade
+
+I have used a simple sum() function that gives the total number of plants growing in "Shade".
+
+```{r}
+# sum of all the rows
+sum(xmlDataFrame$LIGHT=='Shade')
+
+```
+
+### 9. Writing the dataframe to a new table in a new SQLite database using the dbWriteTable function.
+
+A dbWriteTable() function writes, overwrites or appends a data frame to a database table, optionally converting row names to a column and specifying SQL data types for fields. Here, a new database **plantsDB.db** is created which has the table **plantsXML**. Additionally, the columns are modified to lower case.
+
+```{r}
+# installing and loading packages
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(pacman, rio, tidyverse)
+
+if (!require("RSQLite")) install.packages("RSQLite")
+library(RSQLite)
+
+# connecting to SQLite
+con <- dbConnect(RSQLite::SQLite(), "plantsDB.db")
+
+# converting column names to lowercase for simplicity
+names(xmlDataFrame)<-tolower(names(xmlDataFrame))
+
+# writing **xmlDataFrame** to **plantsXML** table
+write<-dbWriteTable(con, "plantsXML", xmlDataFrame, overwrite=TRUE)
+write
+
+# showing all the data from **plantsXML** table
+dbGetQuery(con, "SELECT * FROM plantsXML")
+
+
+```
+
+### 10. SQLite- inspection of database
+
+On inspection, it is clearly visible that the new database **plantsDB** is created and it has the table **plantsXML**. The columns are correct in lower case as has been done in Task 9 above.
+
+![Fig 10.1 :plantsDB Database inspection](D:/NEU/5200 DBMS/Practicum3/plantsDB.png)
+
+![Fig 10.2 :plantsDB Schema in SQLite](D:/NEU/5200 DBMS/Practicum3/DBschema.png)
+
+Following query is executed from R and it shows the tables present in plantsDB.
+
+```{r}
+# listing all the tables in plantsDB.db
+dbListTables(con)
+```
+
+### 11. SQLite- Write a SQL UPDATE statement that decreases all prices by 0.75%.
+
+The update query when executed in SQLite, decreases all the prices by 0.75%.
+
+![Fig 11.1 :Before UPDATE query is executed in SQLite](D:/NEU/5200 DBMS/Practicum3/beforeUpdate.png)
+
+
+![Fig 11.2 :UPDATE query in SQLite](D:/NEU/5200 DBMS/Practicum3/updateQuery.png)
+
+After updating the rows the price in retail column-
+
+![Fig 11.2 :After UPDATE query is executed in SQLite](D:/NEU/5200 DBMS/Practicum3/afterUpdate.png)
+
+
+Below is it's execution from R-
+
+```{r}
+# update query 
+dbExecute(con, "UPDATE plantsXML SET retail=retail*(1-0.0075)")
+
+
+#displaying the modified result
+dbGetQuery(con, "SELECT * FROM plantsXML")
+
+```
+
+### 12. Connecting to the SQLite database from above
+
+After disconnecting the old instance, new connection is established with **plantsDB.db**
+
+```{r}
+# disconnecting the older instance
+dbDisconnect(con)
+
+# establishing DB connection
+con <- dbConnect(RSQLite::SQLite(), "plantsDB.db")
+```
+
+### 13. Executing a SQL query that finds the number of plants by light.
+
+The **plantsXML** table has a **light** attribute (lower case as it was modified in Task 9 above).
+
+```{r}
+# print the count of plants grouped by light
+dbGetQuery(con, "SELECT Count(*) As plantCount, light FROM plantsXML GROUP BY light")
+
+```
+
+### 14. Parse the Plant Catalog XML and write an XPath query that finds all plants that grow in full shade or in full sun.
+
+The parsing of the XML file is being done through xmlParse() function. To write an XPath query in R, xpathSApply() function is used where one parameter is the parsed XML variable. The second argument is the path to extract the required values. **//*[LIGHT='Shade' or LIGHT='Sun']**
+
+```{r}
+# give the input file name- "plants.xml" to the function
+result <- xmlParse(file = "plants.xml")
+
+# print the result
+print(result)
+
+# applying XPath query
+partialRes<- xpathSApply(result,"//*[LIGHT='Shade' or LIGHT='Sun']")
+
+# print the partial result
+partialRes
+
+```
+
+### 15. Put the result from the previous XPath query into a dataframe and then calculate the 10% trimmed mean of the prices.
+
+The previous query stores the XML object in partialRes variable. This variable then is used to transform to data frame as a parameter of xmlToDataFrame() function.
+
+Trimmed means are robust estimators of central tendency. To compute a trimmed mean, we remove a predetermined amount of observations on each side of a distribution, and average the remaining observations.
+
+**Trimmed Mean steps-**
+
+1. Sort the numeric values in the column to be trimmed.
+
+2. The number of observations to remove is **floor(0.1 * total_observation)**. So we trim these many observations from each end.
+
+3. We take the mean of the remaining observations.
+
+In R, all this is implemented in a mean() function with a parameter **trim** set to some decimal value.
+
+```{r}
+# transforming the XML to dataframe
+partialDataFrame <- xmlToDataFrame(partialRes)
+
+# print the result
+partialDataFrame
+
+# calulation of 10% trimmed mean
+mean(as.numeric(substring(partialDataFrame$PRICE,2)), trim=0.1)
+
+```
+
+
